@@ -1,7 +1,14 @@
-const { buildArticlesBlock } = require("./incidentService");
-
 const FASTINO_API_URL = process.env.FASTINO_API_URL || "";
 const FASTINO_API_KEY = process.env.FASTINO_API_KEY || "";
+
+function buildArticlesBlock(articles) {
+  return (articles || [])
+    .map(
+      (a, idx) =>
+        `[${idx + 1}] Title: ${a.title}\nURL: ${a.url}\nTime: ${a.time}\nContent: ${a.content}\n`
+    )
+    .join("\n");
+}
 
 async function extractIncidentWithFastino(articles, topic) {
   if (!FASTINO_API_URL || !FASTINO_API_KEY) {

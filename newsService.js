@@ -21,7 +21,7 @@ async function fetchNews(topic, maxResults = 5) {
       }))
     );
   } catch (err) {
-    console.error("Tavily fetch failed, continuing with fallback / Yutori:", err.message);
+    console.error("Tavily fetch failed (check key + https://api.tavily.com):", err.message);
   }
 
   try {
