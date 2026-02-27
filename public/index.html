@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Autonomous Crisis → Action Agent</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <!-- React + ReactDOM from CDN -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+
+    <!-- Use Babel presets that are known to exist: es2015 + react -->
+    <script type="text/babel" data-presets="es2015,react">
+      const TOPICS = ["earthquake", "flood", "cyber_attack", "power_outage"];
+
+      function App() {
+        const [topic, setTopic] = React.useState("earthquake");
+        const [loading, setLoading] = React.useState(false);
+        const [result, setResult] = React.useState(null);
+        const [error, setError] = React.useState("");
+        const [adjustSeverity, setAdjustSeverity] = React.useState("");
+
+        async function runAgent() {
+          setLoading(true);
+          setError("");
+          setResult(null);
+          try {
+            const res = await fetch("/api/decision", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ topic }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Failed");
+            setResult(data);
+          } catch (e) {
+            setError(e.message);
+          } finally {
+            setLoading(false);
+          }
+        }
+
+        async function submitFeedback() {
+          if (!result || !adjustSeverity) return;
+          try {
+            await fetch("/api/feedback", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                incidentId: result.incidentId,
+                newSeverity: adjustSeverity,
+                comment: "User feedback from UI",
+              }),
+            });
+            alert("Feedback saved and will influence next runs.");
+          } catch (e) {
+            console.error(e);
+          }
+        }
+
+        function downloadCsv() {
+          if (!result) return;
+          const rows = [
+            ["Title", "Description", "Owner", "Priority"],
+            ...result.actions.map((a) => [a.title, a.description, a.owner, a.priority]),
+          ];
+          const csv = rows
+            .map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(","))
+            .join("\n");
+          const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `checklist_${result.incidentId || "incident"}.csv`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+
+        return (
+          <div style={{ maxWidth: 900, margin: "0 auto", fontFamily: "system-ui", padding: 24 }}>
+            <h1>Autonomous Crisis → Action Agent</h1>
+            <p style={{ color: "#555" }}>
+              Monitors incidents, understands impact, validates risk with multiple models, and generates concrete actions.
+            </p>
+
+            <div style={{ marginBottom: 16, display: "flex", gap: 12, alignItems: "center" }}>
+              <label>
+                Topic:&nbsp;
+                <select value={topic} onChange={(e) => setTopic(e.target.value)}>
+                  {TOPICS.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button onClick={runAgent} disabled={loading} style={{ padding: "8px 16px" }}>
+                {loading ? "Running..." : "Run Agent"}
+              </button>
+            </div>
+
+            {error && <div style={{ color: "red", marginBottom: 16 }}>{error}</div>}
+
+            {result && (
+              <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16 }}>
+                <h2>Incident Summary</h2>
+                <p>
+                  <strong>Severity:</strong> {result.severity}
+                </p>
+                <p>
+                  <strong>Confidence:</strong> {result.confidence}
+                </p>
+                <p>
+                  <strong>Summary:</strong> {result.summary}
+                </p>
+                <p>
+                  <strong>Why:</strong> {result.rationale}
+                </p>
+
+                <h3>Action Plan</h3>
+                <ol>
+                  {result.actions.map((a, idx) => (
+                    <li key={idx} style={{ marginBottom: 8 }}>
+                      <strong>{a.title}</strong> — {a.description}
+                      <div style={{ fontSize: 12, color: "#666" }}>
+                        Owner: {a.owner} | Priority: {a.priority}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+
+                <button onClick={downloadCsv} style={{ marginTop: 8 }}>
+                  Download Checklist (CSV)
+                </button>
+
+                <h3 style={{ marginTop: 24 }}>Adjust Severity (Self‑Improvement)</h3>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <select value={adjustSeverity} onChange={(e) => setAdjustSeverity(e.target.value)}>
+                    <option value="">Pick severity</option>
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                    <option value="Critical">Critical</option>
+                  </select>
+                  <button onClick={submitFeedback} disabled={!adjustSeverity}>
+                    Save Feedback
+                  </button>
+                </div>
+
+                {result.validator && (
+                  <React.Fragment>
+                    <h3 style={{ marginTop: 24 }}>Risk Validator Insights</h3>
+                    <p>
+                      <strong>Validator agreement:</strong> {result.validator.agreement_with_plan}
+                    </p>
+                    <p>
+                      <strong>Validator comment:</strong> {result.validator.severity_adjustment_reason}
+                    </p>
+                      {result.validator.critical_warnings && result.validator.critical_warnings.length > 0 && (
+                        <ul>
+                          {result.validator.critical_warnings.map((w, i) => (
+                            <li key={i}>{w}</li>
+                          ))}
+                        </ul>
+                      )}
+                  </React.Fragment>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
+
