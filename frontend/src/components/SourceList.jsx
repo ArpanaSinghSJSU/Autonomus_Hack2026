@@ -22,10 +22,12 @@ export default function SourceList({ sources = [] }) {
 
           <div style={{ marginTop: 8, fontSize: 12, color: "#444" }}>
             <div>{formatDate(s.published)}</div>
-            {s.url ? (
+            {s.url && !s.url.includes("example.com") ? (
               <a href={s.url} target="_blank" rel="noreferrer">
                 Open source
               </a>
+            ) : s.url && s.url.includes("example.com") ? (
+              <span style={{ color: "#888" }}>Simulated source (no external link)</span>
             ) : null}
           </div>
         </div>

@@ -54,6 +54,13 @@ function buildHeuristicIncident(articles, topic) {
   };
 
   const locationGuess = guessLocationFromText(first.content) || "Unknown";
+  // Prefer a news-style summary: use title + first sentence of content (avoids definition text)
+  const contentSnippet = first.content.slice(0, 300);
+  const firstSentence = contentSnippet.split(/[.!?]/)[0]?.trim() || contentSnippet;
+  const summary =
+    first.title && !first.content?.toLowerCase().startsWith("what is") && !first.content?.toLowerCase().startsWith("an earthquake is")
+      ? `${first.title}. ${firstSentence}.`
+      : firstSentence + (firstSentence.endsWith(".") ? "" : ".");
 
   return {
     event: topic || "unknown_event",
@@ -61,7 +68,7 @@ function buildHeuristicIncident(articles, topic) {
     orgs: [],
     severity_cues: [],
     time_window: first.time,
-    summary: first.content.slice(0, 220),
+    summary: summary.slice(0, 400),
     raw_sources: [
       {
         title: first.title,

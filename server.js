@@ -1,7 +1,11 @@
-require("dotenv").config();
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const express = require("express");
-const path = require("path");
+
+// Startup: confirm env (so you can see if Tavily/Reka are loaded)
+const hasTavily = !!(process.env.TAVILY_API_KEY || "").trim();
+console.log("Tavily API key:", hasTavily ? "set" : "NOT SET (using simulated news)");
 const cors = require("cors");
 const { analyzeArticlesIntoIncident } = require("./incidentService");
 const { fetchNews } = require("./newsService");
@@ -14,13 +18,18 @@ const PORT = process.env.PORT || 4000;
 app.use(cors());
 app.use(express.json());
 
-// Serve React UI from /public
 const publicDir = path.join(__dirname, "public");
-app.use(express.static(publicDir));
 
-// Health check
+// ---------- API routes FIRST (so /api/* and /health never serve HTML) ----------
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
+});
+
+app.get("/api/env-check", (req, res) => {
+  res.json({
+    tavily: (process.env.TAVILY_API_KEY || "").trim() ? "set" : "not set",
+    reka: (process.env.REKA_API_KEY || "").trim() ? "set" : "not set",
+  });
 });
 
 // Person 1: Real-time inputs – Tavily + Yutori + (optional) Airbyte
@@ -128,19 +137,19 @@ app.post("/api/decision", async (req, res) => {
   }
 });
 
-// Feedback endpoint – for now just logs body to console
 app.post("/api/feedback", (req, res) => {
   console.log("Received feedback:", req.body);
   res.json({ ok: true });
 });
 
-// Fallback: send index.html for any unknown route (for SPA routing if needed)
-// Use app.use without a path to avoid path-to-regexp issues in Express 5.
+// Serve React UI from /public, then SPA fallback
+app.use(express.static(publicDir));
 app.use((req, res) => {
   res.sendFile(path.join(publicDir, "index.html"));
 });
 
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
+  if (!hasTavily) console.log("  → Add TAVILY_API_KEY to .env and restart for real news.");
 });
 

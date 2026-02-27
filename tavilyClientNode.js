@@ -1,3 +1,5 @@
+const path = require("path");
+
 const TAVILY_URL = "https://api.tavily.com/search";
 
 /**
@@ -5,7 +7,13 @@ const TAVILY_URL = "https://api.tavily.com/search";
  * Returns: [{ title, url, published, content, source }]
  */
 async function fetchFromTavily(topic, maxResults = 5) {
-  const key = (process.env.TAVILY_API_KEY || "").trim();
+  let key = (process.env.TAVILY_API_KEY || "").trim();
+  if (!key) {
+    try {
+      require("dotenv").config({ path: path.join(__dirname, ".env") });
+      key = (process.env.TAVILY_API_KEY || "").trim();
+    } catch (_) {}
+  }
 
   // Simulation fallback if no key configured
   if (!key) {
@@ -19,8 +27,16 @@ async function fetchFromTavily(topic, maxResults = 5) {
     }));
   }
 
+  // Prefer recent news/incidents over definitions (e.g. "latest earthquake news" not "earthquake")
+  const newsQuery =
+    topic === "earthquake" ? "latest earthquake news today magnitude" :
+    topic === "flood" ? "latest flood news today" :
+    topic === "cyber_attack" || topic === "power_outage" ? `latest ${topic.replace("_", " ")} news today` :
+    `latest ${topic} news incidents today`;
+  const query = newsQuery;
+
   const payload = {
-    query: topic,
+    query,
     search_depth: "advanced",
     max_results: maxResults,
   };
@@ -29,7 +45,7 @@ async function fetchFromTavily(topic, maxResults = 5) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": key,
+      "Authorization": `Bearer ${key}`,
     },
     body: JSON.stringify(payload),
   });
