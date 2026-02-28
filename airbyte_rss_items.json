@@ -1,0 +1,10 @@
+{
+  "items": [
+    {
+      "title": "Airbyte RSS demo item",
+      "link": "https://earthquake.usgs.gov/",
+      "published": "2026-02-27T00:00:00Z",
+      "description": "This is a placeholder. Airbyte will replace this file with real RSS sync output."
+    }
+  ]
+}
