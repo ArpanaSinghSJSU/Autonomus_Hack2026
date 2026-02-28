@@ -24,7 +24,7 @@ Extract a SINGLE incident object from the given news text.
 Only output valid JSON matching exactly this schema:
 {
   "event": "string, short event type e.g. earthquake, flood, cyber_attack",
-  "location": "string, main location (city/region/country)",
+  "location": "string: place name (e.g. Japan, California) OR 'lat,long' (e.g. 35.67,139.65) if coordinates appear in text",
   "orgs": ["array of organizations mentioned"],
   "severity_cues": ["array of phrases indicating severity"],
   "time_window": "ISO8601-ish text summarizing when (e.g. '2026-02-27T10:00Z' or 'early morning')",

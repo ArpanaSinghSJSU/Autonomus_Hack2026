@@ -18,6 +18,15 @@ function getDriver() {
   return driver;
 }
 
+function locationToParams(loc) {
+  if (loc == null) return { locationName: "Unknown", locationLat: null, locationLong: null };
+  const name = loc.name != null ? String(loc.name).trim() : null;
+  const lat = typeof loc.lat === "number" && !Number.isNaN(loc.lat) ? loc.lat : null;
+  const long = typeof loc.long === "number" && !Number.isNaN(loc.long) ? loc.long : null;
+  const locationName = name || (lat != null && long != null ? `${lat},${long}` : "Unknown");
+  return { locationName, locationLat: lat, locationLong: long };
+}
+
 async function saveIncidentToGraph(incident) {
   const drv = getDriver();
   if (!drv) {
@@ -25,11 +34,14 @@ async function saveIncidentToGraph(incident) {
   }
 
   const session = drv.session();
+  const locParams = locationToParams(incident.location);
 
   const params = {
     id: incident.id,
     event: incident.event,
-    location: incident.location,
+    locationName: locParams.locationName,
+    locationLat: locParams.locationLat,
+    locationLong: locParams.locationLong,
     orgs: incident.orgs || [],
     severity_cues: incident.severity_cues || [],
     time_window: incident.time_window || null,
@@ -39,19 +51,7 @@ async function saveIncidentToGraph(incident) {
     confidence: incident.confidence || 0.0,
   };
 
-  const query = `
-CREATE CONSTRAINT unique_event_id IF NOT EXISTS
-FOR (e:Event) REQUIRE e.id IS UNIQUE;
-
-CREATE CONSTRAINT unique_location_name IF NOT EXISTS
-FOR (l:Location) REQUIRE l.name IS UNIQUE;
-
-CREATE CONSTRAINT unique_org_name IF NOT EXISTS
-FOR (o:Org) REQUIRE o.name IS UNIQUE;
-
-CREATE CONSTRAINT unique_source_url IF NOT EXISTS
-FOR (s:Source) REQUIRE s.url IS UNIQUE;
-
+  const mergeQuery = `
 MERGE (e:Event {id: $id})
 SET e.type = $event,
     e.summary = $summary,
@@ -61,24 +61,71 @@ SET e.type = $event,
     e.confidence = $confidence,
     e.created_at = datetime()
 
-MERGE (loc:Location {name: $location})
-MERGE (e)-[:LOCATED_IN]->(loc);
+WITH e
+MERGE (loc:Location {name: $locationName})
+SET loc.lat = $locationLat,
+    loc.long = $locationLong
+MERGE (e)-[:LOCATED_IN]->(loc)
 
-FOREACH (orgName IN $orgs |
-  MERGE (o:Org {name: orgName})
-  MERGE (e)-[:MENTIONS]->(o)
-);
+WITH e
+UNWIND $orgs AS orgName
+MERGE (o:Org {name: orgName})
+MERGE (e)-[:MENTIONS]->(o)
 
-FOREACH (src IN $raw_sources |
-  MERGE (s:Source {url: src.url})
-  SET s.title = src.title,
-      s.reported_at = src.reported_at
-  MERGE (e)-[:REPORTED_BY]->(s)
-);
+WITH e
+UNWIND $raw_sources AS src
+MERGE (s:Source {url: src.url})
+SET s.title = src.title,
+    s.reported_at = src.reported_at
+MERGE (e)-[:REPORTED_BY]->(s)
 `;
 
   try {
-    await session.executeWrite((tx) => tx.run(query, params));
+    await session.executeWrite((tx) => tx.run(mergeQuery, params));
+  } finally {
+    await session.close();
+  }
+}
+
+/**
+ * Verify Neo4j connection and return recent events with location and severity_cues.
+ * Returns { connected: true, events: [...] } or { connected: false, error: string }.
+ */
+async function listRecentEvents(limit = 20) {
+  const drv = getDriver();
+  if (!drv) {
+    return { connected: false, error: "Neo4j not configured (set NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)" };
+  }
+
+  const session = drv.session();
+  try {
+    const result = await session.executeRead((tx) =>
+      tx.run(
+        `
+      MATCH (e:Event)-[:LOCATED_IN]->(loc:Location)
+      RETURN e.id AS id, e.type AS event, e.severity_cues AS severity_cues,
+             e.summary AS summary, e.severity AS severity, e.created_at AS created_at,
+             loc.name AS location_name, loc.lat AS location_lat, loc.long AS location_long
+      ORDER BY e.created_at DESC
+      LIMIT $limit
+    `,
+        { limit }
+      )
+    );
+    const events = result.records.map((r) => ({
+      id: r.get("id"),
+      event: r.get("event"),
+      location_name: r.get("location_name"),
+      location_lat: r.get("location_lat"),
+      location_long: r.get("location_long"),
+      severity_cues: r.get("severity_cues"),
+      severity: r.get("severity"),
+      summary: r.get("summary"),
+      created_at: r.get("created_at")?.toString?.() ?? r.get("created_at"),
+    }));
+    return { connected: true, count: events.length, events };
+  } catch (err) {
+    return { connected: false, error: err.message };
   } finally {
     await session.close();
   }
@@ -86,5 +133,6 @@ FOREACH (src IN $raw_sources |
 
 module.exports = {
   saveIncidentToGraph,
+  listRecentEvents,
 };
 

@@ -8,7 +8,7 @@
 
 | Plan item | Status | Where |
 |-----------|--------|--------|
-| **Person 1 – Data & ingestion** | Done | `GET /api/news?topic=earthquake` → `[{ title, content, url, time }]`. Tavily (primary), Yutori (simulated). `newsService.js`, `tavilyClientNode.js`, `yutoriClient.js`. |
+| **Person 1 – Data & ingestion** | Done | `GET /api/news?topic=earthquake` → `[{ title, content, url, time }]`. Tavily (primary), Yutori when key set. `newsService.js`, `tavilyClientNode.js`, `yutoriClient.js`. |
 | **Person 2 – Understanding + memory** | Done | Incident from articles (Fastino or heuristic), Neo4j write when env set. `incidentService.js`, `fastinoClient.js`, `neo4jClient.js`. `POST /api/incident/analyze`. |
 | **Person 3 – Agent brain** | Done | Senso (impact) → Reka (plan + validate), merged. Inlined in main server (`decisionAgentCore.js`) + optional standalone `decisionAgent.js`. `decisionAgentMapper.js` maps to UI shape. |
 | **Person 4 – UI (no deployment)** | Done | Topic selector, Run Agent, Sources, Incident plan, Checklist, Download CSV, **Adjust severity** (self-improvement). `frontend/` (Vite) → build to `public/`. |

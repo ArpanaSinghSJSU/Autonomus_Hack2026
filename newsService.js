@@ -4,7 +4,7 @@ const { fetchFromYutori } = require("./yutoriClient");
 /**
  * Fetch and aggregate news articles from Tavily (primary) and Yutori (secondary).
  * Returns a normalized list:
- * [{ title, content, url, time }]
+ * [{ title, content, url, time, source }]
  */
 async function fetchNews(topic, maxResults = 5) {
   const articles = [];
@@ -24,19 +24,23 @@ async function fetchNews(topic, maxResults = 5) {
     console.error("Tavily fetch failed (check key + https://api.tavily.com):", err.message);
   }
 
-  try {
-    const yutori = await fetchFromYutori(topic, 3);
-    articles.push(
-      ...yutori.map((a) => ({
-        title: a.title,
-        content: a.content,
-        url: a.url,
-        time: a.published,
-        source: a.source || "yutori",
-      }))
-    );
-  } catch (err) {
-    console.error("Yutori fetch failed (simulated or real):", err.message);
+  // Only add Yutori when we have key (and optionally YUTORI_SCOUT_ID for immediate updates).
+  const hasYutoriKey = !!(process.env.YUTORI_API_KEY || "").trim();
+  if (hasYutoriKey) {
+    try {
+      const yutori = await fetchFromYutori(topic, 3);
+      articles.push(
+        ...yutori.map((a) => ({
+          title: a.title,
+          content: a.content,
+          url: a.url,
+          time: a.published,
+          source: a.source || "yutori",
+        }))
+      );
+    } catch (err) {
+      console.error("Yutori fetch failed:", err.message);
+    }
   }
 
   // If everything failed, return a minimal simulated article so the pipeline still works.
@@ -59,4 +63,3 @@ async function fetchNews(topic, maxResults = 5) {
 module.exports = {
   fetchNews,
 };
-

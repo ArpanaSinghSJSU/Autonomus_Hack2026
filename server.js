@@ -9,6 +9,7 @@ console.log("Tavily API key:", hasTavily ? "set" : "NOT SET (using simulated new
 const cors = require("cors");
 const { analyzeArticlesIntoIncident } = require("./incidentService");
 const { fetchNews } = require("./newsService");
+const { listRecentEvents } = require("./neo4jClient");
 const { mapDecisionAgentResponse } = require("./decisionAgentMapper");
 const { runAgent } = require("./decisionAgentCore");
 
@@ -29,10 +30,23 @@ app.get("/api/env-check", (req, res) => {
   res.json({
     tavily: (process.env.TAVILY_API_KEY || "").trim() ? "set" : "not set",
     reka: (process.env.REKA_API_KEY || "").trim() ? "set" : "not set",
+    neo4j: (process.env.NEO4J_URI || "").trim() ? "set" : "not set",
   });
 });
 
-// Person 1: Real-time inputs – Tavily + Yutori + (optional) Airbyte
+// Verify Neo4j: list recent events (event, location, severity_cues). ?limit=20
+app.get("/api/neo4j/events", async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
+    const data = await listRecentEvents(limit);
+    res.json(data);
+  } catch (err) {
+    console.error("Error in /api/neo4j/events:", err);
+    res.status(500).json({ connected: false, error: err.message });
+  }
+});
+
+// Person 1: Real-time inputs – Tavily + Yutori
 // Deliverable API: GET /api/news?topic=earthquake
 app.get("/api/news", async (req, res) => {
   try {
@@ -142,9 +156,12 @@ app.post("/api/feedback", (req, res) => {
   res.json({ ok: true });
 });
 
-// Serve React UI from /public, then SPA fallback
+// Serve React UI from /public, then SPA fallback (never serve HTML for /api/*)
 app.use(express.static(publicDir));
-app.use((req, res) => {
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api/") || req.path === "/health") {
+    return res.status(404).json({ error: "Not found", path: req.path });
+  }
   res.sendFile(path.join(publicDir, "index.html"));
 });
 
